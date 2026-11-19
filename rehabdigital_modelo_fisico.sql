@@ -445,33 +445,3 @@ CREATE UNIQUE INDEX uq_inscricao_aberta ON inscricao (
 CREATE UNIQUE INDEX uq_atribuicao_dispositivo_ativa ON atribuicao_dispositivo (
     CASE WHEN data_fim IS NULL THEN dispositivo_id END
 );
-
--- =====================================================================
--- 8. Índices de apoio às chaves estrangeiras
---    O Oracle não cria índices para chaves estrangeiras. Só se criam onde
---    a coluna não é o início de uma chave primária ou de um UNIQUE.
--- =====================================================================
-
-CREATE INDEX ix_utilizador_perfil ON utilizador (perfil_id);
-CREATE INDEX ix_paciente_codigo_postal ON paciente (codigo_postal);
-CREATE INDEX ix_exercicio_equipamento_equipamento ON exercicio_equipamento (equipamento_id);
-CREATE INDEX ix_programa_exercicio_exercicio ON programa_exercicio (exercicio_id);
-CREATE INDEX ix_inscricao_programa ON inscricao (programa_id);
-CREATE INDEX ix_inscricao_profissional ON inscricao (profissional_id);
-CREATE INDEX ix_sessao_profissional ON sessao (profissional_id);
-CREATE INDEX ix_sessao_motivo_cancelamento ON sessao (motivo_cancelamento_id);
-CREATE INDEX ix_execucao_exercicio_sessao ON execucao_exercicio (sessao_id);
-CREATE INDEX ix_execucao_exercicio_exercicio ON execucao_exercicio (exercicio_id);
-CREATE INDEX ix_atribuicao_dispositivo_dispositivo ON atribuicao_dispositivo (dispositivo_id);
-CREATE INDEX ix_medicao_dispositivo ON medicao (dispositivo_id);
-CREATE INDEX ix_medicao_tipo_indicador ON medicao (tipo_indicador_id);
-CREATE INDEX ix_alerta_limite_referencia ON alerta (limite_referencia_id);
-CREATE INDEX ix_alerta_profissional ON alerta (profissional_id);
-CREATE INDEX ix_objetivo_paciente ON objetivo (paciente_id);
-CREATE INDEX ix_objetivo_tipo_indicador ON objetivo (tipo_indicador_id);
-CREATE INDEX ix_avaliacao_inicial_tipo_indicador ON avaliacao_inicial (tipo_indicador_id);
-CREATE INDEX ix_avaliacao_inicial_profissional ON avaliacao_inicial (profissional_id);
-
--- Índices de apoio às consultas (sessões futuras e medições recentes)
-CREATE INDEX ix_sessao_data_hora ON sessao (data_hora);
-CREATE INDEX ix_medicao_data_hora ON medicao (data_hora);
