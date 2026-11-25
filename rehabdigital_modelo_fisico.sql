@@ -1,6 +1,4 @@
--- =====================================================================
--- 1. Acesso: perfis e utilizadores
--- =====================================================================
+-- Acesso e pessoas
 
 CREATE TABLE perfil (
     perfil_id   NUMBER GENERATED ALWAYS AS IDENTITY,
@@ -25,18 +23,6 @@ CREATE TABLE utilizador (
         REFERENCES perfil (perfil_id)
 );
 
--- =====================================================================
--- 2. Pessoas
--- =====================================================================
-
-CREATE TABLE codigo_postal (
-    codigo_postal  VARCHAR2(8) NOT NULL,
-    localidade     VARCHAR2(100) NOT NULL,
-    CONSTRAINT pk_codigo_postal PRIMARY KEY (codigo_postal),
-    CONSTRAINT ck_codigo_postal_formato CHECK
-        (REGEXP_LIKE(codigo_postal, '^[0-9]{4}-[0-9]{3}$'))
-);
-
 CREATE TABLE paciente (
     paciente_id      NUMBER GENERATED ALWAYS AS IDENTITY,
     codigo_interno   VARCHAR2(30)  NOT NULL,
@@ -45,8 +31,7 @@ CREATE TABLE paciente (
     sexo             VARCHAR2(20) NOT NULL,
     email            VARCHAR2(150) NOT NULL,
     telefone         VARCHAR2(30),
-    rua              VARCHAR2(200),
-    codigo_postal    VARCHAR2(8),
+    morada           VARCHAR2(250),
     data_registo     DATE DEFAULT SYSDATE NOT NULL,
     estado           VARCHAR2(20) DEFAULT 'ATIVO' NOT NULL,
     utilizador_id    NUMBER,
@@ -55,8 +40,6 @@ CREATE TABLE paciente (
     CONSTRAINT uq_paciente_utilizador UNIQUE (utilizador_id),
     CONSTRAINT ck_paciente_sexo CHECK (sexo IN ('FEMININO', 'MASCULINO', 'OUTRO')),
     CONSTRAINT ck_paciente_estado CHECK (estado IN ('ATIVO', 'INATIVO')),
-    CONSTRAINT fk_paciente_codigo_postal FOREIGN KEY (codigo_postal)
-        REFERENCES codigo_postal (codigo_postal),
     CONSTRAINT fk_paciente_utilizador FOREIGN KEY (utilizador_id)
         REFERENCES utilizador (utilizador_id)
 );
@@ -78,9 +61,7 @@ CREATE TABLE profissional (
         REFERENCES utilizador (utilizador_id)
 );
 
--- =====================================================================
--- 3. Terapêutica: programas, exercícios e equipamento
--- =====================================================================
+-- Terapeutica
 
 CREATE TABLE programa (
     programa_id             NUMBER GENERATED ALWAYS AS IDENTITY,
@@ -88,7 +69,7 @@ CREATE TABLE programa (
     objetivo_clinico        VARCHAR2(500) NOT NULL,
     area_intervencao        VARCHAR2(100) NOT NULL,
     duracao_semanas         NUMBER(3) NOT NULL,
-    frequencia_recomendada  NUMBER(2) NOT NULL,          -- sessões por semana
+    frequencia_recomendada  NUMBER(2) NOT NULL,
     preco                   NUMBER(10,2) NOT NULL,
     ativo                   NUMBER(1) DEFAULT 1 NOT NULL,
     CONSTRAINT pk_programa PRIMARY KEY (programa_id),
@@ -106,65 +87,48 @@ CREATE TABLE exercicio (
     grupo_funcional       VARCHAR2(100) NOT NULL,
     dificuldade           VARCHAR2(20) NOT NULL,
     duracao_estimada_min  NUMBER(4) NOT NULL,
-    preco                 NUMBER(10,2),                  -- preço de referência (opcional)
+    equipamento           VARCHAR2(250),
+    preco                 NUMBER(10,2),
     ativo                 NUMBER(1) DEFAULT 1 NOT NULL,
     CONSTRAINT pk_exercicio PRIMARY KEY (exercicio_id),
-    CONSTRAINT ck_exercicio_dificuldade CHECK (dificuldade IN
-        ('FACIL', 'MEDIA', 'DIFICIL')),
+    CONSTRAINT ck_exercicio_dificuldade CHECK (dificuldade IN ('FACIL', 'MEDIA', 'DIFICIL')),
     CONSTRAINT ck_exercicio_duracao CHECK (duracao_estimada_min > 0),
     CONSTRAINT ck_exercicio_preco CHECK (preco IS NULL OR preco >= 0),
     CONSTRAINT ck_exercicio_ativo CHECK (ativo IN (0, 1))
 );
 
-CREATE TABLE equipamento (
-    equipamento_id  NUMBER GENERATED ALWAYS AS IDENTITY,
-    designacao      VARCHAR2(100) NOT NULL,
-    CONSTRAINT pk_equipamento PRIMARY KEY (equipamento_id),
-    CONSTRAINT uq_equipamento_designacao UNIQUE (designacao)
-);
-
-CREATE TABLE exercicio_equipamento (
-    exercicio_id    NUMBER NOT NULL,
-    equipamento_id  NUMBER NOT NULL,
-    CONSTRAINT pk_exercicio_equipamento PRIMARY KEY (exercicio_id, equipamento_id),
-    CONSTRAINT fk_exercicio_equipamento_exercicio FOREIGN KEY (exercicio_id)
-        REFERENCES exercicio (exercicio_id),
-    CONSTRAINT fk_exercicio_equipamento_equipamento FOREIGN KEY (equipamento_id)
-        REFERENCES equipamento (equipamento_id)
-);
-
 CREATE TABLE programa_exercicio (
-    programa_id   NUMBER NOT NULL,
-    exercicio_id  NUMBER NOT NULL,
-    ordem         NUMBER(3) NOT NULL,
-    repeticoes    NUMBER(4) NOT NULL,
-    frequencia    NUMBER(2) NOT NULL,                    -- vezes por semana
+    programa_id     NUMBER NOT NULL,
+    exercicio_id    NUMBER NOT NULL,
+    ordem           NUMBER(3) NOT NULL,
+    repeticoes      NUMBER(4) NOT NULL,
+    frequencia      NUMBER(2) NOT NULL,
+    preco_acordado  NUMBER(10,2), -- guarda o preco do exercicio no plano
     CONSTRAINT pk_programa_exercicio PRIMARY KEY (programa_id, exercicio_id),
     CONSTRAINT uq_programa_exercicio_ordem UNIQUE (programa_id, ordem),
     CONSTRAINT ck_programa_exercicio_ordem CHECK (ordem > 0),
     CONSTRAINT ck_programa_exercicio_repeticoes CHECK (repeticoes > 0),
     CONSTRAINT ck_programa_exercicio_frequencia CHECK (frequencia > 0),
+    CONSTRAINT ck_programa_exercicio_preco CHECK (preco_acordado IS NULL OR preco_acordado >= 0),
     CONSTRAINT fk_programa_exercicio_programa FOREIGN KEY (programa_id)
         REFERENCES programa (programa_id),
     CONSTRAINT fk_programa_exercicio_exercicio FOREIGN KEY (exercicio_id)
         REFERENCES exercicio (exercicio_id)
 );
 
--- =====================================================================
--- 4. Inscrições, sessões, notificações e execuções
--- =====================================================================
-
 CREATE TABLE inscricao (
     inscricao_id     NUMBER GENERATED ALWAYS AS IDENTITY,
     paciente_id      NUMBER NOT NULL,
     programa_id      NUMBER NOT NULL,
-    profissional_id  NUMBER NOT NULL,                    -- profissional responsável
+    profissional_id  NUMBER NOT NULL,
     data_inicio      DATE NOT NULL,
     data_fim         DATE,
+    preco_acordado   NUMBER(10,2) NOT NULL, -- guarda o preco do programa na data da inscricao
     estado           VARCHAR2(20) NOT NULL,
     CONSTRAINT pk_inscricao PRIMARY KEY (inscricao_id),
     CONSTRAINT uq_inscricao_paciente_programa_inicio
         UNIQUE (paciente_id, programa_id, data_inicio),
+    CONSTRAINT ck_inscricao_preco CHECK (preco_acordado >= 0),
     CONSTRAINT ck_inscricao_estado CHECK (estado IN
         ('EM_CURSO', 'CONCLUIDA', 'SUSPENSA', 'CANCELADA')),
     CONSTRAINT ck_inscricao_data_fim CHECK (
@@ -179,22 +143,17 @@ CREATE TABLE inscricao (
         REFERENCES profissional (profissional_id)
 );
 
-CREATE TABLE motivo_cancelamento (
-    motivo_cancelamento_id  NUMBER GENERATED ALWAYS AS IDENTITY,
-    descricao               VARCHAR2(255) NOT NULL,
-    CONSTRAINT pk_motivo_cancelamento PRIMARY KEY (motivo_cancelamento_id),
-    CONSTRAINT uq_motivo_cancelamento_descricao UNIQUE (descricao)
-);
+-- Sessoes
 
 CREATE TABLE sessao (
-    sessao_id               NUMBER GENERATED ALWAYS AS IDENTITY,
-    inscricao_id            NUMBER NOT NULL,
-    profissional_id         NUMBER NOT NULL,
-    motivo_cancelamento_id  NUMBER,
-    data_hora               TIMESTAMP NOT NULL,
-    duracao_min             NUMBER(4) NOT NULL,
-    modalidade              VARCHAR2(20) NOT NULL,
-    estado                  VARCHAR2(30) NOT NULL,
+    sessao_id            NUMBER GENERATED ALWAYS AS IDENTITY,
+    inscricao_id         NUMBER NOT NULL,
+    profissional_id      NUMBER NOT NULL,
+    data_hora            TIMESTAMP NOT NULL,
+    duracao_min          NUMBER(4) NOT NULL,
+    modalidade           VARCHAR2(20) NOT NULL,
+    estado               VARCHAR2(30) NOT NULL,
+    motivo_cancelamento  VARCHAR2(255),
     CONSTRAINT pk_sessao PRIMARY KEY (sessao_id),
     CONSTRAINT uq_sessao_inscricao_data_hora UNIQUE (inscricao_id, data_hora),
     CONSTRAINT ck_sessao_duracao CHECK (duracao_min > 0),
@@ -204,31 +163,13 @@ CREATE TABLE sessao (
          'CANCELADA_PROFISSIONAL', 'NAO_REALIZADA')),
     CONSTRAINT ck_sessao_motivo CHECK (
         (estado IN ('CANCELADA_PACIENTE', 'CANCELADA_PROFISSIONAL')
-            AND motivo_cancelamento_id IS NOT NULL)
+            AND motivo_cancelamento IS NOT NULL)
         OR (estado NOT IN ('CANCELADA_PACIENTE', 'CANCELADA_PROFISSIONAL')
-            AND motivo_cancelamento_id IS NULL)),
+            AND motivo_cancelamento IS NULL)),
     CONSTRAINT fk_sessao_inscricao FOREIGN KEY (inscricao_id)
         REFERENCES inscricao (inscricao_id),
     CONSTRAINT fk_sessao_profissional FOREIGN KEY (profissional_id)
-        REFERENCES profissional (profissional_id),
-    CONSTRAINT fk_sessao_motivo_cancelamento FOREIGN KEY (motivo_cancelamento_id)
-        REFERENCES motivo_cancelamento (motivo_cancelamento_id)
-);
-
-CREATE TABLE notificacao (
-    notificacao_id      NUMBER GENERATED ALWAYS AS IDENTITY,
-    sessao_id           NUMBER NOT NULL,
-    tipo                VARCHAR2(20) NOT NULL,
-    data_envio          TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
-    email_destinatario  VARCHAR2(150) NOT NULL,          -- cópia do endereço usado no envio
-    estado              VARCHAR2(20) NOT NULL,
-    CONSTRAINT pk_notificacao PRIMARY KEY (notificacao_id),
-    CONSTRAINT uq_notificacao_sessao_envio UNIQUE (sessao_id, data_envio),
-    CONSTRAINT ck_notificacao_tipo CHECK (tipo IN ('MARCACAO', 'ATUALIZACAO')),
-    CONSTRAINT ck_notificacao_estado CHECK (estado IN
-        ('PENDENTE', 'ENVIADA', 'FALHADA')),
-    CONSTRAINT fk_notificacao_sessao FOREIGN KEY (sessao_id)
-        REFERENCES sessao (sessao_id)
+        REFERENCES profissional (profissional_id)
 );
 
 CREATE TABLE execucao_exercicio (
@@ -247,19 +188,32 @@ CREATE TABLE execucao_exercicio (
         REFERENCES exercicio (exercicio_id)
 );
 
--- =====================================================================
--- 5. Monitorização: dispositivos, medições, limites e alertas
--- =====================================================================
+CREATE TABLE notificacao (
+    notificacao_id      NUMBER GENERATED ALWAYS AS IDENTITY,
+    sessao_id           NUMBER NOT NULL,
+    tipo                VARCHAR2(20) NOT NULL,
+    data_envio          TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
+    email_destinatario  VARCHAR2(150) NOT NULL,
+    estado              VARCHAR2(20) NOT NULL,
+    CONSTRAINT pk_notificacao PRIMARY KEY (notificacao_id),
+    CONSTRAINT uq_notificacao_sessao_envio UNIQUE (sessao_id, data_envio),
+    CONSTRAINT ck_notificacao_tipo CHECK (tipo IN ('MARCACAO', 'ATUALIZACAO')),
+    CONSTRAINT ck_notificacao_estado CHECK (estado IN ('PENDENTE', 'ENVIADA', 'FALHADA')),
+    CONSTRAINT fk_notificacao_sessao FOREIGN KEY (sessao_id)
+        REFERENCES sessao (sessao_id)
+);
+
+-- Monitorizacao
 
 CREATE TABLE dispositivo (
-    dispositivo_id    NUMBER GENERATED ALWAYS AS IDENTITY,
-    numero_serie      VARCHAR2(100) NOT NULL,
-    modelo            VARCHAR2(100) NOT NULL,
-    tipo_dispositivo  VARCHAR2(30) NOT NULL,
-    ativo             NUMBER(1) DEFAULT 1 NOT NULL,
+    dispositivo_id  NUMBER GENERATED ALWAYS AS IDENTITY,
+    numero_serie    VARCHAR2(100) NOT NULL,
+    modelo          VARCHAR2(100) NOT NULL,
+    tipo            VARCHAR2(30) NOT NULL,
+    ativo           NUMBER(1) DEFAULT 1 NOT NULL,
     CONSTRAINT pk_dispositivo PRIMARY KEY (dispositivo_id),
     CONSTRAINT uq_dispositivo_numero_serie UNIQUE (numero_serie),
-    CONSTRAINT ck_dispositivo_tipo CHECK (tipo_dispositivo IN
+    CONSTRAINT ck_dispositivo_tipo CHECK (tipo IN
         ('OXIMETRO', 'MONITOR_CARDIACO', 'PEDOMETRO', 'SENSOR_MOVIMENTO')),
     CONSTRAINT ck_dispositivo_ativo CHECK (ativo IN (0, 1))
 );
@@ -270,6 +224,7 @@ CREATE TABLE atribuicao_dispositivo (
     dispositivo_id             NUMBER NOT NULL,
     data_inicio                DATE NOT NULL,
     data_fim                   DATE,
+    frequencia_monitorizacao   VARCHAR2(50),
     CONSTRAINT pk_atribuicao_dispositivo PRIMARY KEY (atribuicao_dispositivo_id),
     CONSTRAINT uq_atribuicao_dispositivo_inicio
         UNIQUE (paciente_id, dispositivo_id, data_inicio),
@@ -288,14 +243,13 @@ CREATE TABLE tipo_indicador (
     CONSTRAINT uq_tipo_indicador_designacao UNIQUE (designacao)
 );
 
--- A severidade ordena-se alfabeticamente como AVISO < CRITICO. Se forem
--- acrescentados níveis, deve passar a existir um nível numérico.
 CREATE TABLE limite_referencia (
     limite_referencia_id  NUMBER GENERATED ALWAYS AS IDENTITY,
     tipo_indicador_id     NUMBER NOT NULL,
+    severidade            VARCHAR2(20) NOT NULL,
     valor_min             NUMBER(10,2),
     valor_max             NUMBER(10,2),
-    severidade            VARCHAR2(20) NOT NULL,
+    procedimento_atuacao  VARCHAR2(500),
     valido_desde          DATE NOT NULL,
     CONSTRAINT pk_limite_referencia PRIMARY KEY (limite_referencia_id),
     CONSTRAINT uq_limite_referencia_indicador
@@ -309,19 +263,16 @@ CREATE TABLE limite_referencia (
 );
 
 CREATE TABLE medicao (
-    medicao_id         NUMBER GENERATED ALWAYS AS IDENTITY,
-    paciente_id        NUMBER NOT NULL,
-    dispositivo_id     NUMBER NOT NULL,
-    tipo_indicador_id  NUMBER NOT NULL,
-    data_hora          TIMESTAMP NOT NULL,
-    valor              NUMBER(10,2) NOT NULL,
+    medicao_id                 NUMBER GENERATED ALWAYS AS IDENTITY,
+    atribuicao_dispositivo_id  NUMBER NOT NULL,
+    tipo_indicador_id          NUMBER NOT NULL,
+    data_hora                  TIMESTAMP NOT NULL,
+    valor                      NUMBER(10,2) NOT NULL,
     CONSTRAINT pk_medicao PRIMARY KEY (medicao_id),
     CONSTRAINT uq_medicao_instante
-        UNIQUE (paciente_id, dispositivo_id, data_hora, tipo_indicador_id),
-    CONSTRAINT fk_medicao_paciente FOREIGN KEY (paciente_id)
-        REFERENCES paciente (paciente_id),
-    CONSTRAINT fk_medicao_dispositivo FOREIGN KEY (dispositivo_id)
-        REFERENCES dispositivo (dispositivo_id),
+        UNIQUE (atribuicao_dispositivo_id, tipo_indicador_id, data_hora),
+    CONSTRAINT fk_medicao_atribuicao FOREIGN KEY (atribuicao_dispositivo_id)
+        REFERENCES atribuicao_dispositivo (atribuicao_dispositivo_id),
     CONSTRAINT fk_medicao_tipo_indicador FOREIGN KEY (tipo_indicador_id)
         REFERENCES tipo_indicador (tipo_indicador_id)
 );
@@ -330,7 +281,7 @@ CREATE TABLE alerta (
     alerta_id             NUMBER GENERATED ALWAYS AS IDENTITY,
     medicao_id            NUMBER NOT NULL,
     limite_referencia_id  NUMBER NOT NULL,
-    profissional_id       NUMBER,                        -- só preenchido quando tratado
+    profissional_id       NUMBER,
     data_hora             TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
     estado                VARCHAR2(20) DEFAULT 'ABERTO' NOT NULL,
     data_tratamento       TIMESTAMP,
@@ -350,80 +301,18 @@ CREATE TABLE alerta (
         REFERENCES profissional (profissional_id)
 );
 
--- =====================================================================
--- 6. Informação clínica (Anexo I)
--- =====================================================================
-
-CREATE TABLE condicao (
-    condicao_id              NUMBER GENERATED ALWAYS AS IDENTITY,
-    paciente_id              NUMBER NOT NULL,
-    diagnostico              VARCHAR2(200) NOT NULL,
-    area_reabilitacao        VARCHAR2(100) NOT NULL,
-    nivel_funcional_inicial  VARCHAR2(100) NOT NULL,
-    data_registo             DATE NOT NULL,
-    CONSTRAINT pk_condicao PRIMARY KEY (condicao_id),
-    CONSTRAINT uq_condicao_diagnostico UNIQUE (paciente_id, diagnostico, data_registo),
-    CONSTRAINT fk_condicao_paciente FOREIGN KEY (paciente_id)
-        REFERENCES paciente (paciente_id)
-);
-
-CREATE TABLE limitacao_funcional (
-    limitacao_funcional_id  NUMBER GENERATED ALWAYS AS IDENTITY,
-    condicao_id             NUMBER NOT NULL,
-    descricao               VARCHAR2(300) NOT NULL,
-    CONSTRAINT pk_limitacao_funcional PRIMARY KEY (limitacao_funcional_id),
-    CONSTRAINT uq_limitacao_funcional_descricao UNIQUE (condicao_id, descricao),
-    CONSTRAINT fk_limitacao_funcional_condicao FOREIGN KEY (condicao_id)
-        REFERENCES condicao (condicao_id)
-);
-
-CREATE TABLE objetivo (
-    objetivo_id        NUMBER GENERATED ALWAYS AS IDENTITY,
-    paciente_id        NUMBER NOT NULL,
-    tipo_indicador_id  NUMBER,                           -- só nas metas mensuráveis
-    descricao          VARCHAR2(500) NOT NULL,
-    valor_alvo         NUMBER(10,2),
-    prazo              DATE NOT NULL,
-    estado             VARCHAR2(20) DEFAULT 'EM_CURSO' NOT NULL,
-    CONSTRAINT pk_objetivo PRIMARY KEY (objetivo_id),
-    CONSTRAINT ck_objetivo_estado CHECK (estado IN
-        ('EM_CURSO', 'ATINGIDO', 'NAO_ATINGIDO')),
-    CONSTRAINT ck_objetivo_meta CHECK (valor_alvo IS NULL OR tipo_indicador_id IS NOT NULL),
-    CONSTRAINT fk_objetivo_paciente FOREIGN KEY (paciente_id)
-        REFERENCES paciente (paciente_id),
-    CONSTRAINT fk_objetivo_tipo_indicador FOREIGN KEY (tipo_indicador_id)
-        REFERENCES tipo_indicador (tipo_indicador_id)
-);
-
-CREATE TABLE avaliacao_inicial (
-    avaliacao_inicial_id  NUMBER GENERATED ALWAYS AS IDENTITY,
-    paciente_id           NUMBER NOT NULL,
-    tipo_indicador_id     NUMBER NOT NULL,
-    profissional_id       NUMBER NOT NULL,
-    data_avaliacao        DATE NOT NULL,
-    valor                 NUMBER(10,2) NOT NULL,
-    observacoes           VARCHAR2(1000),
-    CONSTRAINT pk_avaliacao_inicial PRIMARY KEY (avaliacao_inicial_id),
-    CONSTRAINT uq_avaliacao_inicial_indicador
-        UNIQUE (paciente_id, data_avaliacao, tipo_indicador_id),
-    CONSTRAINT fk_avaliacao_inicial_paciente FOREIGN KEY (paciente_id)
-        REFERENCES paciente (paciente_id),
-    CONSTRAINT fk_avaliacao_inicial_tipo_indicador FOREIGN KEY (tipo_indicador_id)
-        REFERENCES tipo_indicador (tipo_indicador_id),
-    CONSTRAINT fk_avaliacao_inicial_profissional FOREIGN KEY (profissional_id)
-        REFERENCES profissional (profissional_id)
-);
+-- Informacao clinica
 
 CREATE TABLE consentimento (
-    consentimento_id    NUMBER GENERATED ALWAYS AS IDENTITY,
-    paciente_id         NUMBER NOT NULL,
-    tipo_consentimento  VARCHAR2(30) NOT NULL,
-    data_concessao      DATE NOT NULL,
-    data_revogacao      DATE,
+    consentimento_id  NUMBER GENERATED ALWAYS AS IDENTITY,
+    paciente_id       NUMBER NOT NULL,
+    tipo              VARCHAR2(30) NOT NULL,
+    data_concessao    DATE NOT NULL,
+    data_revogacao    DATE,
     CONSTRAINT pk_consentimento PRIMARY KEY (consentimento_id),
     CONSTRAINT uq_consentimento_concessao
-        UNIQUE (paciente_id, tipo_consentimento, data_concessao),
-    CONSTRAINT ck_consentimento_tipo CHECK (tipo_consentimento IN
+        UNIQUE (paciente_id, tipo, data_concessao),
+    CONSTRAINT ck_consentimento_tipo CHECK (tipo IN
         ('TRATAMENTO_DADOS', 'MONITORIZACAO_REMOTA', 'PARTILHA_DADOS')),
     CONSTRAINT ck_consentimento_datas CHECK
         (data_revogacao IS NULL OR data_revogacao >= data_concessao),
@@ -431,16 +320,56 @@ CREATE TABLE consentimento (
         REFERENCES paciente (paciente_id)
 );
 
--- =====================================================================
--- 7. Índices únicos condicionais (regras de negócio)
--- =====================================================================
+CREATE TABLE avaliacao_funcional (
+    avaliacao_funcional_id   NUMBER GENERATED ALWAYS AS IDENTITY,
+    paciente_id              NUMBER NOT NULL,
+    profissional_id          NUMBER NOT NULL,
+    data_avaliacao           DATE NOT NULL,
+    diagnostico              VARCHAR2(200) NOT NULL,
+    area_reabilitacao        VARCHAR2(100) NOT NULL,
+    limitacoes_funcionais    VARCHAR2(1000),
+    nivel_funcional_inicial  VARCHAR2(100) NOT NULL,
+    objetivos_terapeuticos   VARCHAR2(1000),
+    prazo_previsto           DATE,
+    CONSTRAINT pk_avaliacao_funcional PRIMARY KEY (avaliacao_funcional_id),
+    CONSTRAINT uq_avaliacao_funcional
+        UNIQUE (paciente_id, data_avaliacao, diagnostico),
+    CONSTRAINT ck_avaliacao_funcional_prazo CHECK
+        (prazo_previsto IS NULL OR prazo_previsto >= data_avaliacao),
+    CONSTRAINT fk_avaliacao_funcional_paciente FOREIGN KEY (paciente_id)
+        REFERENCES paciente (paciente_id),
+    CONSTRAINT fk_avaliacao_funcional_profissional FOREIGN KEY (profissional_id)
+        REFERENCES profissional (profissional_id)
+);
 
--- Um paciente não tem duas inscrições em curso ou suspensas no mesmo programa.
+CREATE TABLE avaliacao_indicador (
+    avaliacao_indicador_id  NUMBER GENERATED ALWAYS AS IDENTITY,
+    avaliacao_funcional_id  NUMBER NOT NULL,
+    tipo_indicador_id       NUMBER NOT NULL,
+    valor                   NUMBER(10,2) NOT NULL,
+    valor_meta              NUMBER(10,2),
+    observacoes             VARCHAR2(1000),
+    CONSTRAINT pk_avaliacao_indicador PRIMARY KEY (avaliacao_indicador_id),
+    CONSTRAINT uq_avaliacao_indicador
+        UNIQUE (avaliacao_funcional_id, tipo_indicador_id),
+    CONSTRAINT fk_avaliacao_indicador_avaliacao FOREIGN KEY (avaliacao_funcional_id)
+        REFERENCES avaliacao_funcional (avaliacao_funcional_id),
+    CONSTRAINT fk_avaliacao_indicador_tipo FOREIGN KEY (tipo_indicador_id)
+        REFERENCES tipo_indicador (tipo_indicador_id)
+);
+
+-- Indices unicos condicionais (regras de negocio)
+
+-- Impede duas inscricoes ativas ou suspensas do mesmo paciente no mesmo programa
 CREATE UNIQUE INDEX uq_inscricao_aberta ON inscricao (
     CASE WHEN estado IN ('EM_CURSO', 'SUSPENSA') THEN paciente_id END,
     CASE WHEN estado IN ('EM_CURSO', 'SUSPENSA') THEN programa_id END
 );
 
+-- Impede que o mesmo dispositivo tenha mais do que uma atribuicao ativa
+CREATE UNIQUE INDEX uq_atribuicao_dispositivo_ativa ON atribuicao_dispositivo (
+    CASE WHEN data_fim IS NULL THEN dispositivo_id END
+);
 -- Cada dispositivo tem, no máximo, uma atribuição ativa (sem data de fim).
 CREATE UNIQUE INDEX uq_atribuicao_dispositivo_ativa ON atribuicao_dispositivo (
     CASE WHEN data_fim IS NULL THEN dispositivo_id END
